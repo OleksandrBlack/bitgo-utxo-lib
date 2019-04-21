@@ -12,10 +12,6 @@ var ECPair = require('./ecpair')
 var ecurve = require('ecurve')
 var curve = ecurve.getCurveByName('secp256k1')
 
-var bs58checkBase = require('bs58check/base')
-
-var fastcurve = require('./fastcurve')
-
 function HDNode (keyPair, chainCode) {
   typeforce(types.tuple('ECPair', types.Buffer256bit), arguments)
 
@@ -26,7 +22,6 @@ function HDNode (keyPair, chainCode) {
   this.depth = 0
   this.index = 0
   this.parentFingerprint = 0x00000000
-  this.derivationCache = {}
 }
 
 HDNode.HIGHEST_BIT = 0x80000000
@@ -58,10 +53,7 @@ HDNode.fromSeedHex = function (hex, network) {
 }
 
 HDNode.fromBase58 = function (string, networks) {
-  if (Array.isArray(networks)) {
-    networks = networks[0] || NETWORKS.bitcoin
-  }
-  var buffer = bs58checkBase(networks.hashFunctions.address).decode(string)
+  var buffer = base58check.decode(string)
   if (buffer.length !== 78) throw new Error('Invalid buffer length')
 
   // 4 bytes: version bytes
@@ -79,7 +71,7 @@ HDNode.fromBase58 = function (string, networks) {
 
   // otherwise, assume a network object (or default to bitcoin)
   } else {
-    network = networks || NETWORKS.bitcoin
+    network = networks || NETWORKS.default
   }
 
   if (version !== network.bip32.private &&
@@ -207,7 +199,7 @@ HDNode.prototype.toBase58 = function (__isPrivate) {
     this.keyPair.getPublicKeyBuffer().copy(buffer, 45)
   }
 
-  return bs58checkBase(network.hashFunctions.address).encode(buffer)
+  return base58check.encode(buffer)
 }
 
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#child-key-derivation-ckd-functions
@@ -264,10 +256,7 @@ HDNode.prototype.derive = function (index) {
   } else {
     // Ki = point(parse256(IL)) + Kpar
     //    = G*IL + Kpar
-    var point = fastcurve.publicKeyCreate(IL, false)
-    var Ki = point !== undefined
-      ? ecurve.Point.decodeFrom(curve, point).add(this.keyPair.Q)
-      : curve.G.multiply(pIL).add(this.keyPair.Q)
+    var Ki = curve.G.multiply(pIL).add(this.keyPair.Q)
 
     // In case Ki is the point at infinity, proceed with the next value for i
     if (curve.isInfinity(Ki)) {
@@ -300,11 +289,8 @@ HDNode.prototype.isNeutered = function () {
   return !(this.keyPair.d)
 }
 
-HDNode.prototype.derivePath = function (path, cache) {
+HDNode.prototype.derivePath = function (path) {
   typeforce(types.BIP32Path, path)
-  typeforce(types.maybe(types.Object), cache)
-
-  cache = cache || this.derivationCache
 
   var splitPath = path.split('/')
   if (splitPath[0] === 'm') {
@@ -317,47 +303,14 @@ HDNode.prototype.derivePath = function (path, cache) {
 
   return splitPath.reduce(function (prevHd, indexStr) {
     var index
-    var cacheObject = cache[indexStr] || {}
-    if (cacheObject.node) {
-      cache = cacheObject.next
-      return cacheObject.node
-    }
     if (indexStr.slice(-1) === "'") {
       index = parseInt(indexStr.slice(0, -1), 10)
-      cacheObject.node = prevHd.deriveHardened(index)
+      return prevHd.deriveHardened(index)
     } else {
       index = parseInt(indexStr, 10)
-      cacheObject.node = prevHd.derive(index)
+      return prevHd.derive(index)
     }
-
-    cache[indexStr] = cacheObject
-    cacheObject.next = {}
-    cache = cacheObject.next
-    return cacheObject.node
   }, this)
-}
-
-/**
- * Create a new ECPair object from this HDNode's ECPair.
- *
- * Uses secp256k1 if available for accelerated computation of the cloned public key.
- * @return {ECPair}
- */
-HDNode.prototype.cloneKeypair = function () {
-  var k = this.keyPair
-  var result = new ECPair(k.d, k.d ? null : k.Q, {
-    network: k.network,
-    compressed: k.compressed
-  })
-  // Creating Q from d takes ~25ms, so if it's not created, use native bindings to pre-compute
-  // if Q is not set here, it will be lazily computed via the slow path
-  if (!result.__Q) {
-    var point = fastcurve.publicKeyCreate(k.d.toBuffer(32), false)
-    if (point !== undefined) {
-      result.__Q = ecurve.Point.decodeFrom(curve, point)
-    }
-  }
-  return result
 }
 
 module.exports = HDNode

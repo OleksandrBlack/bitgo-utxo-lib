@@ -5,11 +5,12 @@ const coins = {
   BCH: 'bch',
   BTC: 'btc',
   BTG: 'btg',
-  BTH: 'bth',
   LTC: 'ltc',
   ZEC: 'zec',
+  VRSC: 'vrsc',
+  VERUSTEST: 'verustest',
   DASH: 'dash',
-  GRS: 'grs'
+  DEFAULT: 'default'
 }
 
 coins.isBitcoin = function (network) {
@@ -24,30 +25,24 @@ coins.isBitcoinGold = function (network) {
   return typeforce.value(coins.BTG)(network.coin)
 }
 
-coins.isBithereum = function (network) {
-  return typeforce.value(coins.BTH)(network.coin)
-}
-
 coins.isLitecoin = function (network) {
   return typeforce.value(coins.LTC)(network.coin)
 }
 
 coins.isZcash = function (network) {
-  return typeforce.value(coins.ZEC)(network.coin)
+  return !!network.isZcash
 }
 
-coins.isGroestlcoin = function (network) {
-  return typeforce.value(coins.GRS)(network.coin)
+coins.isVerus = function (network) {
+  return typeforce.value(coins.VRSC)(network.coin)
 }
 
 coins.isValidCoin = typeforce.oneOf(
   coins.isBitcoin,
   coins.isBitcoinCash,
   coins.isBitcoinGold,
-  coins.isBithereum,
   coins.isLitecoin,
-  coins.isZcash,
-  coins.isGroestlcoin
+  coins.isZcash
 )
 
 module.exports = coins

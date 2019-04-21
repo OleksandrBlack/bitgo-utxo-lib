@@ -25,8 +25,8 @@ function vectorSize (someVector) {
   }, 0)
 }
 
-// By default, assume is a bitcoin transaction
-function Transaction (network = networks.bitcoin) {
+// By default, assume is a verus transaction
+function Transaction (network = networks.default) {
   this.version = 1
   this.locktime = 0
   this.ins = []
@@ -55,7 +55,6 @@ Transaction.SIGHASH_NONE = 0x02
 Transaction.SIGHASH_SINGLE = 0x03
 Transaction.SIGHASH_ANYONECANPAY = 0x80
 Transaction.SIGHASH_BITCOINCASHBIP143 = 0x40
-Transaction.SIGHASH_FORKID_BTH = 0x10
 Transaction.ADVANCED_TRANSACTION_MARKER = 0x00
 Transaction.ADVANCED_TRANSACTION_FLAG = 0x01
 
@@ -80,7 +79,7 @@ Transaction.ZCASH_NOTECIPHERTEXT_SIZE = 1 + 8 + 32 + 32 + 512 + 16
 Transaction.ZCASH_G1_PREFIX_MASK = 0x02
 Transaction.ZCASH_G2_PREFIX_MASK = 0x0a
 
-Transaction.fromBuffer = function (buffer, network = networks.bitcoin, __noStrict) {
+Transaction.fromBuffer = function (buffer, network = networks.default, __noStrict) {
   var offset = 0
   function readSlice (n) {
     offset += n
@@ -249,6 +248,10 @@ Transaction.fromBuffer = function (buffer, network = networks.bitcoin, __noStric
   }
   var tx = new Transaction(network)
   tx.version = readInt32()
+
+  console.log('NETWORK')
+  console.log(network)
+  //console.log('version: ' +  tx.version + ', offset:' + offset)
 
   if (coins.isZcash(network)) {
     // Split the header into fOverwintered and nVersion
@@ -683,7 +686,7 @@ Transaction.prototype.hashForSignature = function (inIndex, prevOutScript, hashT
   buffer.writeInt32LE(hashType, buffer.length - 4)
   txTmp.__toBuffer(buffer, 0, false)
 
-  return this.network.hashFunctions.transaction(buffer)
+  return bcrypto.hash256(buffer)
 }
 
 /**
@@ -714,7 +717,7 @@ Transaction.prototype.getPrevoutHash = function (hashType) {
     if (coins.isZcash(this.network)) {
       return this.getBlake2bHash(bufferWriter.getBuffer(), 'ZcashPrevoutHash')
     }
-    return this.network.hashFunctions.transaction(bufferWriter.getBuffer())
+    return bcrypto.hash256(bufferWriter.getBuffer())
   }
   return ZERO
 }
@@ -737,7 +740,7 @@ Transaction.prototype.getSequenceHash = function (hashType) {
     if (coins.isZcash(this.network)) {
       return this.getBlake2bHash(bufferWriter.getBuffer(), 'ZcashSequencHash')
     }
-    return this.network.hashFunctions.transaction(bufferWriter.getBuffer())
+    return bcrypto.hash256(bufferWriter.getBuffer())
   }
   return ZERO
 }
@@ -766,7 +769,7 @@ Transaction.prototype.getOutputsHash = function (hashType, inIndex) {
     if (coins.isZcash(this.network)) {
       return this.getBlake2bHash(bufferWriter.getBuffer(), 'ZcashOutputsHash')
     }
-    return this.network.hashFunctions.transaction(bufferWriter.getBuffer())
+    return bcrypto.hash256(bufferWriter.getBuffer())
   } else if ((hashType & 0x1f) === Transaction.SIGHASH_SINGLE && inIndex < this.outs.length) {
     // Write only the output specified in inIndex
     var output = this.outs[inIndex]
@@ -778,7 +781,7 @@ Transaction.prototype.getOutputsHash = function (hashType, inIndex) {
     if (coins.isZcash(this.network)) {
       return this.getBlake2bHash(bufferWriter.getBuffer(), 'ZcashOutputsHash')
     }
-    return this.network.hashFunctions.transaction(bufferWriter.getBuffer())
+    return bcrypto.hash256(bufferWriter.getBuffer())
   }
   return ZERO
 }
@@ -792,18 +795,21 @@ Transaction.prototype.getOutputsHash = function (hashType, inIndex) {
  * @returns double SHA-256 or 256-bit BLAKE2b hash
  */
 Transaction.prototype.hashForZcashSignature = function (inIndex, prevOutScript, value, hashType) {
+  console.log('Hash for zcash signature initialized')
+  
   typeforce(types.tuple(types.UInt32, types.Buffer, types.Satoshi, types.UInt32), arguments)
+  console.log('Typeforce completed')
   if (!coins.isZcash(this.network)) {
-    throw new Error('hashForZcashSignature can only be called when using Zcash network')
+    throw new Error('hashForZcashSignature can only be called when using Zcash or Verus network')
   }
   if (this.joinsplits.length > 0) {
     throw new Error('Hash signature for Zcash protected transactions is not supported')
   }
-
   if (inIndex >= this.ins.length && inIndex !== VALUE_UINT64_MAX) {
     throw new Error('Input index is out of range')
   }
 
+  console.log('checking overwinter compatibility')
   if (this.isOverwinterCompatible()) {
     var hashPrevouts = this.getPrevoutHash(hashType)
     var hashSequence = this.getSequenceHash(hashType)
@@ -811,6 +817,7 @@ Transaction.prototype.hashForZcashSignature = function (inIndex, prevOutScript, 
     var hashJoinSplits = ZERO
     var hashShieldedSpends = ZERO
     var hashShieldedOutputs = ZERO
+    console.log('hashes evaluated')
 
     var bufferWriter
     var baseBufferSize = 0
@@ -866,7 +873,23 @@ Transaction.prototype.hashForZcashSignature = function (inIndex, prevOutScript, 
 
     return this.getBlake2bHash(bufferWriter.getBuffer(), personalization)
   }
-  // TODO: support non overwinter transactions
+  else
+  {
+    console.log('not overwinter compatible')
+    return this.hashForSignature(inIndex, prevOutScript, hashType);
+  }
+}
+
+/**
+ * Hash transaction for signing a transparent transaction in Verus Coin. Protected transactions are not yet supported.
+ * @param inIndex
+ * @param prevOutScript
+ * @param value
+ * @param hashType
+ * @returns double SHA-256 or 256-bit BLAKE2b hash
+ */
+Transaction.prototype.hashForVerusSignature = function (inIndex, prevOutScript, value, hashType) {
+  return this.hashForZcashSignature(inIndex, prevOutScript, value, hashType);
 }
 
 Transaction.prototype.hashForWitnessV0 = function (inIndex, prevOutScript, value, hashType) {
@@ -889,7 +912,7 @@ Transaction.prototype.hashForWitnessV0 = function (inIndex, prevOutScript, value
   bufferWriter.writeSlice(hashOutputs)
   bufferWriter.writeUInt32(this.locktime)
   bufferWriter.writeUInt32(hashType)
-  return this.network.hashFunctions.transaction(bufferWriter.getBuffer())
+  return bcrypto.hash256(bufferWriter.getBuffer())
 }
 
 /**
@@ -944,35 +967,8 @@ Transaction.prototype.hashForGoldSignature = function (inIndex, prevOutScript, i
   }
 }
 
-/**
- * Hash transaction for signing a specific input for Bithereum.
- */
-Transaction.prototype.hashForBTHSignature = function (inIndex, prevOutScript, inAmount, hashType, sigVersion) {
-  typeforce(types.tuple(types.UInt32, types.Buffer, /* types.UInt8 */ types.Number, types.maybe(types.UInt53)), arguments)
-
-  // Bithereum also implements segregated witness
-  // therefore we can pull out the setting of nForkHashType
-  // and pass it into the functions.
-
-  var nForkHashType = hashType
-  var fUseForkId = (hashType & Transaction.SIGHASH_FORKID_BTH) > 0
-  if (fUseForkId) {
-    nForkHashType |= this.network.forkId << 8
-  }
-
-  // BIP143 sighash activated in BitcoinCash via 0x40 bit
-  if (sigVersion || fUseForkId) {
-    if (types.Null(inAmount)) {
-      throw new Error('Bithereum sighash requires value of input to be signed.')
-    }
-    return this.hashForWitnessV0(inIndex, prevOutScript, inAmount, nForkHashType)
-  } else {
-    return this.hashForSignature(inIndex, prevOutScript, nForkHashType)
-  }
-}
-
 Transaction.prototype.getHash = function () {
-  return this.network.hashFunctions.transaction(this.__toBuffer(undefined, undefined, false))
+  return bcrypto.hash256(this.__toBuffer(undefined, undefined, false))
 }
 
 Transaction.prototype.getId = function () {

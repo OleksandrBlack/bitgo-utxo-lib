@@ -181,7 +181,7 @@ function fixMultisigOrder (input, transaction, vin, value, network) {
   if (input.redeemScriptType !== scriptTypes.MULTISIG || !input.redeemScript) return
   if (input.pubKeys.length === input.signatures.length) return
 
-  network = network || networks.bitcoin
+  network = network || networks.default
   var unmatched = input.signatures.concat()
 
   input.signatures = input.pubKeys.map(function (pubKey) {
@@ -202,9 +202,6 @@ function fixMultisigOrder (input, transaction, vin, value, network) {
           break
         case coins.BTG:
           hash = transaction.hashForGoldSignature(vin, input.signScript, value, parsed.hashType)
-          break
-        case coins.BTH:
-          hash = transaction.hashForBTHSignature(vin, input.signScript, value, parsed.hashType)
           break
         case coins.ZEC:
           if (value === undefined) {
@@ -491,10 +488,10 @@ function buildInput (input, allowIncomplete) {
   }
 }
 
-// By default, assume is a bitcoin transaction
+// By default, assume is a Verus Coin style transaction
 function TransactionBuilder (network, maximumFeeRate) {
   this.prevTxMap = {}
-  this.network = network || networks.bitcoin
+  this.network = network || networks.default
 
   // WARNING: This is __NOT__ to be relied on, its just another potential safety mechanism (safety in-depth)
   this.maximumFeeRate = maximumFeeRate || 2500
@@ -518,25 +515,38 @@ TransactionBuilder.prototype.setLockTime = function (locktime) {
   this.tx.locktime = locktime
 }
 
-TransactionBuilder.prototype.setVersion = function (version, overwinter = true) {
-  typeforce(types.UInt32, version)
-
-  if (coins.isZcash(this.network)) {
-    if (!this.network.consensusBranchId.hasOwnProperty(this.tx.version)) {
-      throw new Error('Unsupported Zcash transaction')
-    }
-    this.tx.overwintered = (overwinter ? 1 : 0)
-  }
-  this.tx.version = version
-}
+Transaction.OVERWINTER_VERSION_GROUP_ID = 0x03C48270;
+Transaction.SAPLING_VERSION_GROUP_ID = 0x892F2085;
 
 TransactionBuilder.prototype.setVersionGroupId = function (versionGroupId) {
   if (!(coins.isZcash(this.network) && this.tx.isOverwinterCompatible())) {
-    throw new Error('expiryHeight can only be set for Zcash starting at overwinter version. Current network coin: ' +
+    throw new Error('versionGroupId can only be set for Zcash or compatible networks starting at overwinter version. Current network coin: ' +
       this.network.coin + ', version: ' + this.tx.version)
   }
   typeforce(types.UInt32, versionGroupId)
   this.tx.versionGroupId = versionGroupId
+}
+
+TransactionBuilder.prototype.setVersion = function (version) {
+  typeforce(types.UInt32, version)
+
+  this.tx.version = version
+
+  if (coins.isZcash(this.network)) {
+    if (version >= 3)
+    {
+      if (version > Transaction.ZCASH_SAPLING_VERSION)
+      {
+        throw new Error('Unsupported Zcash transaction')
+      }
+      this.tx.overwintered = 1;
+      this.setVersionGroupId(version === 3 ? Transaction.OVERWINTER_VERSION_GROUP_ID : Transaction.SAPLING_VERSION_GROUP_ID)
+    }
+    else
+    {
+      this.tx.overwintered = 0;
+    }
+  }
 }
 
 TransactionBuilder.prototype.setExpiryHeight = function (expiryHeight) {
@@ -546,6 +556,16 @@ TransactionBuilder.prototype.setExpiryHeight = function (expiryHeight) {
   }
   typeforce(types.UInt32, expiryHeight)
   this.tx.expiryHeight = expiryHeight
+}
+
+Transaction.prototype.setOverwinter = function (expiry, versionGroupId) {
+  this.setVersion(3);
+  this.expiry=(expiry||0);
+}
+
+Transaction.prototype.setSapling = function (expiry, versionGroupId) {
+  this.setVersion(4);
+  this.expiry=(expiry||0);
 }
 
 TransactionBuilder.prototype.setJoinSplits = function (transaction) {
@@ -577,7 +597,7 @@ TransactionBuilder.prototype.setJoinSplits = function (transaction) {
 }
 
 TransactionBuilder.fromTransaction = function (transaction, network) {
-  var txbNetwork = network || networks.bitcoin
+  var txbNetwork = network || networks.default
   var txb = new TransactionBuilder(txbNetwork)
 
   if (txb.network.coin !== transaction.network.coin) {
@@ -644,22 +664,38 @@ TransactionBuilder.prototype.addInput = function (txHash, vout, sequence, prevOu
     txHash = txHash.getHash()
   }
 
-  return this.__addInputUnsafe(txHash, vout, {
-    sequence: sequence,
-    prevOutScript: prevOutScript,
-    value: value
-  })
+  if (Transaction.isCoinbaseHash(txHash)) {
+    return this.__addInputUnsafe(txHash, vout, {
+      sequence: sequence,
+      scriptSig: prevOutScript,
+    })
+  }
+  else {
+    return this.__addInputUnsafe(txHash, vout, {
+      sequence: sequence,
+      prevOutScript: prevOutScript,
+      value: value
+    })
+  }
 }
 
 TransactionBuilder.prototype.__addInputUnsafe = function (txHash, vout, options) {
+  var input = {}
+
   if (Transaction.isCoinbaseHash(txHash)) {
-    throw new Error('coinbase inputs not supported')
+    var vin = this.tx.addInput(txHash, vout, options.sequence, options.scriptSig)
+    input = {
+      pubKeys: [],
+      signatures: [],
+      signScript: options.scriptSig,
+    }
+    this.inputs[vin] = input
+    //throw new Error('coinbase inputs not supported')
+    return 0;
   }
 
   var prevTxOut = txHash.toString('hex') + ':' + vout
   if (this.prevTxMap[prevTxOut] !== undefined) throw new Error('Duplicate TxOut: ' + prevTxOut)
-
-  var input = {}
 
   // derive what we can from the scriptSig
   if (options.script !== undefined) {
@@ -723,6 +759,11 @@ TransactionBuilder.prototype.__build = function (allowIncomplete) {
   }
 
   var tx = this.tx.clone()
+  if (Transaction.isCoinbaseHash(tx.ins[0].hash))
+  {
+    return tx;
+  }
+
   // Create script signatures from inputs
   this.inputs.forEach(function (input, i) {
     var scriptType = input.witnessScriptType || input.redeemScriptType || input.prevOutType
@@ -766,11 +807,18 @@ function canSign (input) {
 TransactionBuilder.prototype.sign = function (vin, keyPair, redeemScript, hashType, witnessValue, witnessScript) {
   debug('Signing transaction: (input: %d, hashType: %d, witnessVal: %s, witnessScript: %j)', vin, hashType, witnessValue, witnessScript)
   debug('Transaction Builder network: %j', this.network)
+  console.log('Transaction builder initialized')
+
+  console.log('THIS NETWORK')
+  console.log(this.network)
+  console.log('_____________________________')
 
   // TODO: remove keyPair.network matching in 4.0.0
   if (keyPair.network && keyPair.network !== this.network) throw new TypeError('Inconsistent network')
+  console.log('Consistent network')
   if (!this.inputs[vin]) throw new Error('No input at index: ' + vin)
   hashType = hashType || Transaction.SIGHASH_ALL
+  console.log('Inputs detected')
 
   var input = this.inputs[vin]
 
@@ -780,6 +828,7 @@ TransactionBuilder.prototype.sign = function (vin, keyPair, redeemScript, hashTy
       !input.redeemScript.equals(redeemScript)) {
     throw new Error('Inconsistent redeemScript')
   }
+  console.log('Consistent redeemscript')
 
   var kpPubKey = keyPair.publicKey || keyPair.getPublicKeyBuffer()
   if (!canSign(input)) {
@@ -788,36 +837,56 @@ TransactionBuilder.prototype.sign = function (vin, keyPair, redeemScript, hashTy
       typeforce(types.Satoshi, witnessValue)
       input.value = witnessValue
     }
+    console.log('Input matched witness value')
+    console.log('Preparing input for signing')
 
     debug('Preparing input %d for signing', vin)
 
     if (!canSign(input)) prepareInput(input, kpPubKey, redeemScript, witnessValue, witnessScript)
+    console.log('input prepared')
     if (!canSign(input)) throw Error(input.prevOutType + ' not supported')
   }
 
+  console.log('ready to sign')
+  console.log('VIN: ')
+  console.log(vin)
+  console.log('input.signScript: ')
+  console.log(input.signScript)
+  console.log('witnessValue: ')
+  console.log(witnessValue)
+  console.log('hashType: ')
+  console.log(hashType)
   // ready to sign
   var signatureHash
   if (coins.isBitcoinGold(this.network)) {
     signatureHash = this.tx.hashForGoldSignature(vin, input.signScript, witnessValue, hashType, input.witness)
     debug('Calculated BTG sighash (%s)', signatureHash.toString('hex'))
-  } else if (coins.isBithereum(this.network)) {
-    signatureHash = this.tx.hashForBTHSignature(vin, input.signScript, witnessValue, hashType, input.witness)
-    debug('Calculated BTH sighash (%s)', signatureHash.toString('hex'))
+    console.log('Calculated BTG sighash (%s)', signatureHash.toString('hex'))
   } else if (coins.isBitcoinCash(this.network)) {
     signatureHash = this.tx.hashForCashSignature(vin, input.signScript, witnessValue, hashType)
     debug('Calculated BCH sighash (%s)', signatureHash.toString('hex'))
+    console.log('Calculated BCH sighash (%s)', signatureHash.toString('hex'))
   } else if (coins.isZcash(this.network)) {
     signatureHash = this.tx.hashForZcashSignature(vin, input.signScript, witnessValue, hashType)
     debug('Calculated ZEC sighash (%s)', signatureHash.toString('hex'))
+    console.log('Calculated ZEC sighash (%s)', signatureHash.toString('hex'))
+  } else if (coins.isVerus(this.network)) {
+    signatureHash = this.tx.hashForVerusSignature(vin, input.signScript, witnessValue, hashType)
+    debug('Calculated VRSC sighash (%s)', signatureHash.toString('hex'))
+    console.log('Calculated VRSC sighash (%s)', signatureHash.toString('hex'))
   } else {
     if (input.witness) {
       signatureHash = this.tx.hashForWitnessV0(vin, input.signScript, witnessValue, hashType)
-      debug('Calculated witnessv0 sighash (%s)', signatureHash.toString('hex'))
+      debug('Calculated witnessv0 sighash (%s)', signatureHash)
+      console.log('Calculated witnessv0 sighash (%s)', signatureHash)
     } else {
       signatureHash = this.tx.hashForSignature(vin, input.signScript, hashType)
       debug('Calculated sighash (%s)', signatureHash.toString('hex'))
+      console.log('Calculated sighash (%s)', signatureHash.toString('hex'))
     }
   }
+
+  console.log('sighash calculated')
 
   // enforce in order signing of public keys
   var signed = input.pubKeys.some(function (pubKey, i) {
@@ -830,9 +899,8 @@ TransactionBuilder.prototype.sign = function (vin, keyPair, redeemScript, hashTy
     if (Buffer.isBuffer(signature)) signature = ECSignature.fromRSBuffer(signature)
 
     debug('Produced signature (r: %s, s: %s)', signature.r, signature.s)
-    
+
     input.signatures[i] = signature.toScriptSignature(hashType)
-    
     return true
   })
 

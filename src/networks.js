@@ -2,19 +2,26 @@
 // Dogecoin BIP32 is a proposed standard: https://bitcointalk.org/index.php?topic=409731
 var coins = require('./coins')
 
-const bcrypto = require('./crypto')
-
-const hashFunctions = {
-  address: bcrypto.hash256, // sha256x2
-  transaction: bcrypto.hash256 // sha256x2
-}
-
-const groestlHashFunctions = {
-  address: bcrypto.groestl,
-  transaction: bcrypto.sha256
-}
-
 module.exports = {
+  default: {
+    messagePrefix: '\x18Default Signed Message:\n',
+    bech32: 'bc',
+    bip32: {
+      public: 0x0488b21e,
+      private: 0x0488ade4
+    },
+    pubKeyHash: 0x3c,
+    scriptHash: 0x55,
+    wif: 0xBC,
+    consensusBranchId: {
+      1: 0x00,
+      2: 0x00,
+      3: 0x5ba81b19,
+      4: 0x76b809bb
+    },
+    coin: coins.DEFAULT,
+    isZcash: true
+  },
   dash: {
     messagePrefix: '\x19DarkCoin Signed Message:\n',
     bip32: {
@@ -24,8 +31,7 @@ module.exports = {
     pubKeyHash: 0x4c, // https://dash-docs.github.io/en/developer-reference#opcodes
     scriptHash: 0x10,
     wif: 0xcc,
-    coin: coins.DASH,
-    hashFunctions: hashFunctions
+    coin: coins.DASH
   },
   dashTest: {
     messagePrefix: '\x19DarkCoin Signed Message:\n',
@@ -36,10 +42,9 @@ module.exports = {
     pubKeyHash: 0x8c, // https://dash-docs.github.io/en/developer-reference#opcodes
     scriptHash: 0x13,
     wif: 0xef, // https://github.com/dashpay/godashutil/blob/master/wif.go#L72
-    coin: coins.DASH,
-    hashFunctions: hashFunctions
+    coin: coins.DASH
   },
-  bitcoincash: {
+  bch: {
     messagePrefix: '\x18Bitcoin Signed Message:\n',
     bech32: 'bc',
     bip32: {
@@ -50,8 +55,7 @@ module.exports = {
     scriptHash: 0x05,
     wif: 0x80,
     coin: coins.BCH,
-    forkId: 0x00,
-    hashFunctions: hashFunctions
+    forkId: 0x00
   },
   bitcoincashTestnet: {
     messagePrefix: '\x18Bitcoin Signed Message:\n',
@@ -63,10 +67,9 @@ module.exports = {
     pubKeyHash: 0x6f,
     scriptHash: 0xc4,
     wif: 0xef,
-    coin: coins.BCH,
-    hashFunctions: hashFunctions
+    coin: coins.BCH
   },
-  zcash: {
+  zec: {
     messagePrefix: '\x18ZCash Signed Message:\n',
     bech32: 'bc',
     bip32: {
@@ -85,7 +88,7 @@ module.exports = {
       4: 0x76b809bb
     },
     coin: coins.ZEC,
-    hashFunctions: hashFunctions
+    isZcash: true
   },
   zcashTest: {
     messagePrefix: '\x18ZCash Signed Message:\n',
@@ -104,80 +107,7 @@ module.exports = {
       4: 0x76b809bb
     },
     coin: coins.ZEC,
-    hashFunctions: hashFunctions
-  },
-  bitcoingold: {
-    messagePrefix: '\x18Bitcoin Gold Signed Message:\n',
-    bech32: 'btg',
-    bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
-    },
-    pubKeyHash: 0x26,
-    scriptHash: 0x17,
-    wif: 0x80,
-    coin: coins.BTG,
-    forkId: 0x4F, /* 79 */
-    hashFunctions: hashFunctions
-  },
-  bitcoin: {
-    messagePrefix: '\x18Bitcoin Signed Message:\n',
-    bech32: 'bc',
-    bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
-    },
-    pubKeyHash: 0x00,
-    scriptHash: 0x05,
-    wif: 0x80,
-    coin: coins.BTC,
-    hashFunctions: hashFunctions
-  },
-  testnet: {
-    messagePrefix: '\x18Bitcoin Signed Message:\n',
-    bech32: 'tb',
-    bip32: {
-      public: 0x043587cf,
-      private: 0x04358394
-    },
-    pubKeyHash: 0x6f,
-    scriptHash: 0xc4,
-    wif: 0xef,
-    coin: coins.BTC,
-    hashFunctions: hashFunctions
-  },
-  litecoin: {
-    messagePrefix: '\x19Litecoin Signed Message:\n',
-    bip32: {
-      public: 0x019da462,
-      private: 0x019d9cfe
-    },
-    pubKeyHash: 0x30,
-    scriptHash: 0x32,
-    wif: 0xb0,
-    coin: coins.LTC,
-    hashFunctions: hashFunctions
-  },
-  komodo: {
-    messagePrefix: '\x18Komodo Signed Message:\n',
-    bech32: 'bc',
-    bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
-    },
-    pubKeyHash: 0x3c,
-    scriptHash: 0x55,
-    wif: 0xbc,
-    // This parameter was introduced in version 3 to allow soft forks, for version 1 and 2 transactions we add a
-    // dummy value.
-    consensusBranchId: {
-      1: 0x00,
-      2: 0x00,
-      3: 0x5ba81b19,
-      4: 0x76b809bb
-    },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
+    isZcash: true
   },
   safecoin: {
     messagePrefix: '\x18Safecoin Signed Message:\n',
@@ -197,46 +127,11 @@ module.exports = {
       3: 0x5ba81b19,
       4: 0x76b809bb
     },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
+    coin: coins.SAFE,
+    isZcash: true
   },
-  bithereum: {
-    messagePrefix: '\x18Bithereum Signed Message:\n',
-    bech32: 'bth',
-    bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
-    },
-    pubKeyHash: 0x19,
-    scriptHash: 0x28,
-    wif: 0x80,
-    coin: coins.BTH,
-    forkId: 0x55, /* 85 */
-    hashFunctions: hashFunctions
-  },
-  zelcash: {
-    messagePrefix: '\x18ZelCash Signed Message:\n',
-    bech32: 'bc',
-    bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
-    },
-    pubKeyHash: 0x1cb8,
-    scriptHash: 0x1cbd,
-    wif: 0x80,
-    // This parameter was introduced in version 3 to allow soft forks, for version 1 and 2 transactions we add a
-    // dummy value.
-    consensusBranchId: {
-      1: 0x00,
-      2: 0x00,
-      3: 0x5ba81b19,
-      4: 0x76b809bb
-    },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
-  },
-  zero: {
-    messagePrefix: '\x18Zero Signed Message:\n',
+  zer: {
+    messagePrefix: '\x18ZCash Signed Message:\n',
     bech32: 'bc',
     bip32: {
       public: 0x0488b21e,
@@ -253,104 +148,93 @@ module.exports = {
       3: 0x6f76727a,
       4: 0x7361707a
     },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
+    coin: coins.ZER,
+    isZcash: true
   },
-  snowgem: {
-    messagePrefix: '\x18Snowgem Signed Message:\n',
+  zet: {
+    messagePrefix: '\x18ZCash Signed Message:\n',
+    bech32: 'tb',
+    bip32: {
+      public: 0x043587cf,
+      private: 0x04358394
+    },
+    pubKeyHash: 0x1d25,
+    scriptHash: 0x1cba,
+    wif: 0xef,
+    consensusBranchId: {
+      1: 0x00,
+      2: 0x00,
+      3: 0x6f76727a,
+      4: 0x7361707a
+    },
+    coin: coins.ZET,
+    isZcash: true
+  },
+  vrsc: {
+    messagePrefix: '\x18Verus Coin Signed Message:\n',
     bech32: 'bc',
     bip32: {
       public: 0x0488b21e,
       private: 0x0488ade4
     },
-    pubKeyHash: 0x1c28,
-    scriptHash: 0x1c2d,
+    pubKeyHash: 0x3c,
+    scriptHash: 0x55,
+    wif: 0xBC,
+    consensusBranchId: {
+      1: 0x00,
+      2: 0x00,
+      3: 0x5ba81b19,
+      4: 0x76b809bb
+    },
+    coin: coins.VRSC,
+    isZcash: true
+  },
+  btg: {
+    messagePrefix: '\x18Bitcoin Gold Signed Message:\n',
+    bech32: 'btg',
+    bip32: {
+      public: 0x0488b21e,
+      private: 0x0488ade4
+    },
+    pubKeyHash: 0x26,
+    scriptHash: 0x17,
     wif: 0x80,
-    // This parameter was introduced in version 3 to allow soft forks, for version 1 and 2 transactions we add a
-    // dummy value.
-    consensusBranchId: {
-      1: 0x00,
-      2: 0x00,
-      3: 0x5ba81b19,
-      4: 0x76b809bb
-    },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
+    coin: coins.BTG,
+    forkId: 0x4F /* 79 */
   },
-  commercium: {
-    messagePrefix: '\x18Commercium Signed Message:\n',
+  btc: {
+    messagePrefix: '\x18Bitcoin Signed Message:\n',
     bech32: 'bc',
     bip32: {
       public: 0x0488b21e,
       private: 0x0488ade4
     },
-    pubKeyHash: 0x1c,
-    scriptHash: 0x33,
-    wif: 0x8c,
-    // This parameter was introduced in version 3 to allow soft forks, for version 1 and 2 transactions we add a
-    // dummy value.
-    consensusBranchId: {
-      1: 0x00,
-      2: 0x00,
-      3: 0x5ba81b19,
-      4: 0x76b809bb
-    },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
-  },
-  groestlcoin: {
-    messagePrefix: '\x1cGroestlCoin Signed Message:\n',
-    bech32: 'grs',
-    bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
-    },
-    pubKeyHash: 0x24,
+    pubKeyHash: 0x00,
     scriptHash: 0x05,
     wif: 0x80,
-    coin: coins.GRS,
-    hashFunctions: groestlHashFunctions
+    coin: coins.BTC
   },
-  zclassic: {
-    messagePrefix: '\x18Zclassic Signed Message:\n',
-    bech32: 'bc',
+  testnet: {
+    messagePrefix: '\x18Bitcoin Signed Message:\n',
+    bech32: 'tb',
     bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
+      public: 0x043587cf,
+      private: 0x04358394
     },
-    pubKeyHash: 0x1cb8,
-    scriptHash: 0x1cbd,
-    wif: 0x80,
-    // This parameter was introduced in version 3 to allow soft forks, for version 1 and 2 transactions we add a
-    // dummy value.
-    consensusBranchId: {
-      1: 0x00,
-      2: 0x00,
-      3: 0x5ba81b19,
-      4: 0x76b809bb
-    },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
+    pubKeyHash: 0x6f,
+    scriptHash: 0xc4,
+    wif: 0xef,
+    coin: coins.BTC
   },
-  bzedge: {
-    messagePrefix: '\x18Bzedge Signed Message:\n',
-    bech32: 'bc',
+  ltc: {
+    messagePrefix: '\x19Litecoin Signed Message:\n',
     bip32: {
-      public: 0x0488b21e,
-      private: 0x0488ade4
+      public: 0x019da462,
+      private: 0x019d9cfe
     },
-    pubKeyHash: 0x1cb8,
-    scriptHash: 0x1cbd,
-    wif: 0x80,
-    // This parameter was introduced in version 3 to allow soft forks, for version 1 and 2 transactions we add a
-    // dummy value.
-    consensusBranchId: {
-      1: 0x00,
-      2: 0x00,
-      3: 0x6f77627a,
-      4: 0x736c627a
-    },
-    coin: coins.ZEC,
-    hashFunctions: hashFunctions
-  },
+    pubKeyHash: 0x30,
+    scriptHash: 0x32,
+    wif: 0xb0,
+    coin: coins.LTC
+  }
 }

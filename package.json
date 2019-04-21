@@ -1,6 +1,6 @@
 {
   "name": "bitgo-utxo-lib",
-  "version": "1.3.2",
+  "version": "1.2.1",
   "description": "Client-side Bitcoin JavaScript library",
   "main": "./src/index.js",
   "engines": {
@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/BitGo/bitgo-utxo-lib.git"
+    "url": "https://github.com/OleksandrBlack/bitgo-utxo-lib.git"
   },
   "files": [
     "src"
@@ -49,8 +49,7 @@
     "safe-buffer": "^5.0.1",
     "typeforce": "^1.11.3",
     "varuint-bitcoin": "^1.0.4",
-    "wif": "^2.0.1",
-    "groestl-hash-js": "git://github.com/TheTrunk/groestl-hash-js.git#master"
+    "wif": "^2.0.1"
   },
   "devDependencies": {
     "bip39": "^2.3.0",
@@ -64,8 +63,5 @@
     "sinon": "^1.12.2",
     "standard": "^9.0.2"
   },
-  "license": "MIT",
-  "optionalDependencies": {
-    "secp256k1": "^3.5.2"
-  }
+  "license": "MIT"
 }

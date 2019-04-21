@@ -12,8 +12,6 @@ var BigInteger = require('bigi')
 var ecurve = require('ecurve')
 var secp256k1 = ecdsa.__curve
 
-var fastcurve = require('./fastcurve')
-
 function ECPair (d, Q, options) {
   if (options) {
     typeforce({
@@ -71,11 +69,12 @@ ECPair.fromWIF = function (string, network) {
 
     if (!network) throw new Error('Unknown network version')
 
-  // otherwise, assume a network object (or default to bitcoin)
+  // otherwise, assume a network object (or default to vrsc style network)
   } else {
-    network = network || NETWORKS.bitcoin
-
-    if (version !== network.wif) throw new Error('Invalid network version')
+    network = network || NETWORKS.default
+    console.log('Network WIF: ' + network.wif + ', Version: ' + version)
+    //if (version !== network.wif) throw new Error('Invalid network version')
+    if (version !== network.wif) console.log('Warning: current network version does not match wif key version')
   }
 
   var d = BigInteger.fromBuffer(decoded.privateKey)
@@ -103,7 +102,7 @@ ECPair.makeRandom = function (options) {
 }
 
 ECPair.prototype.getAddress = function () {
-  return baddress.toBase58Check(bcrypto.hash160(this.getPublicKeyBuffer()), this.getNetwork().pubKeyHash, this.network)
+  return baddress.toBase58Check(bcrypto.hash160(this.getPublicKeyBuffer()), this.getNetwork().pubKeyHash)
 }
 
 ECPair.prototype.getNetwork = function () {
@@ -135,8 +134,6 @@ ECPair.prototype.getPrivateKeyBuffer = function () {
 ECPair.prototype.sign = function (hash) {
   if (!this.d) throw new Error('Missing private key')
 
-  var sig = fastcurve.sign(hash, this.d)
-  if (sig !== undefined) return sig
   return ecdsa.sign(hash, this.d)
 }
 
@@ -147,8 +144,6 @@ ECPair.prototype.toWIF = function () {
 }
 
 ECPair.prototype.verify = function (hash, signature) {
-  var fastsig = fastcurve.verify(hash, signature, this.getPublicKeyBuffer())
-  if (fastsig !== undefined) return fastsig
   return ecdsa.verify(hash, signature, this.Q)
 }
 
